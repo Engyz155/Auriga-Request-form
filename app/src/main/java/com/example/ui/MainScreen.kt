@@ -38,6 +38,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -564,6 +569,137 @@ fun IntakeFormTab(viewModel: MainViewModel) {
             }
         }
 
+        // --- Card 4: Photo/Attachment (Camera Section) ---
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CardSlate),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null, tint = MechanicalTeal)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "4. Attachment Photo (Optional)", color = SoftWhite, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+
+                HorizontalDivider(color = DeepSlate, thickness = 1.dp)
+
+                val capturedImageState by viewModel.capturedImage.collectAsState()
+                val context = LocalContext.current
+
+                // Launcher for Camera intent (ACTION_IMAGE_CAPTURE)
+                val cameraLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.StartActivityForResult()
+                ) { result ->
+                    if (result.resultCode == Activity.RESULT_OK) {
+                        val bitmap = result.data?.extras?.get("data") as? android.graphics.Bitmap
+                        if (bitmap != null) {
+                            viewModel.capturedImage.value = bitmap
+                        } else {
+                            Toast.makeText(context, "Failed to capture image.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+
+                // Launcher for Permission request
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission()
+                ) { isGranted ->
+                    if (isGranted) {
+                        try {
+                            val cameraIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+                            cameraLauncher.launch(cameraIntent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Camera could not be opened: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Camera permission is required to capture photos of components.", Toast.LENGTH_LONG).show()
+                    }
+                }
+
+                if (capturedImageState != null) {
+                    // Show captured image preview with option to retake/remove
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Image(
+                            bitmap = capturedImageState!!.asImageBitmap(),
+                            contentDescription = "Captured Component Photo",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = { viewModel.capturedImage.value = null },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                                border = BorderStroke(1.dp, Color.Red),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Remove", fontSize = 12.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    // Trigger camera directly since permission is already granted
+                                    val cameraIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+                                    cameraLauncher.launch(cameraIntent)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MechanicalTeal),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Retake", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                } else {
+                    // Capture CTA
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Add a photo of the mechanical system, broken spare part, or physical dimensions to enrich your AI engineering proposal.",
+                            color = GrayText,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = {
+                                // Request CAMERA permission
+                                permissionLauncher.launch(android.Manifest.permission.CAMERA)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MechanicalTeal),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.testTag("open_camera_button")
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Capture Part Photo", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
+
         // --- Custom Animated Submission Status Action ---
         SubmitActionButton(formState = formState, onSubmit = { viewModel.submitRequest() })
 
@@ -710,28 +846,123 @@ fun RequestsLogTab(requests: List<ClientRequest>, viewModel: MainViewModel) {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "No Submissions Found",
+                text = "No Proposals Found",
                 color = SoftWhite,
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+                fontSize = 18.sp
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Submit a request in the Form tab. It will instantly sync here and generate an AI-crafted engineering proposal draft.",
+                text = "Once you submit a client request in the Form tab, the generated AI engineering proposal will instantly sync and display here in this dashboard.",
                 color = GrayText,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 textAlign = TextAlign.Center,
                 lineHeight = 18.sp
             )
         }
     } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            items(requests) { request ->
-                RequestCard(request = request, onClick = { viewModel.selectRequest(request) })
+            // Dashboard Summary Header
+            Text(
+                text = "Engineering Proposals Dashboard",
+                color = SoftWhite,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            // KPI Grid
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Metric 1: Total
+                Card(
+                    modifier = Modifier.weight(1.1f),
+                    colors = CardDefaults.cardColors(containerColor = CardSlate),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(text = "Total Proposals", color = GrayText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.List, contentDescription = null, tint = MechanicalTeal, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = requests.size.toString(), color = SoftWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Metric 2: Synced to Cloud
+                val syncedCount = requests.count { it.isSynced }
+                Card(
+                    modifier = Modifier.weight(1.1f),
+                    colors = CardDefaults.cardColors(containerColor = CardSlate),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(text = "Cloud Synced", color = GrayText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CloudDone, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = syncedCount.toString(), color = SoftWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Metric 3: Pending
+                val pendingCount = requests.size - syncedCount
+                Card(
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(containerColor = CardSlate),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(text = "Pending Sync", color = GrayText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Sync, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = pendingCount.toString(), color = SoftWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            Text(
+                text = "Proposals List (${requests.size})",
+                color = GrayText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(requests) { request ->
+                    RequestCard(request = request, onClick = { viewModel.selectRequest(request) })
+                }
             }
         }
     }
@@ -747,78 +978,141 @@ fun RequestCard(request: ClientRequest, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .testTag("request_card_${request.id}")
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = CardSlate),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            // Sector Tag and Date
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(MechanicalTeal.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = request.sector,
+                        color = MechanicalTeal,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Text(
+                    text = date,
+                    color = GrayText,
+                    fontSize = 11.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Challenge Title
+            Text(
+                text = request.challenge.substringBefore(" ("),
+                color = SoftWhite,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Client Info
+            Text(
+                text = "Client: ${request.clientName} | ${request.contactInfo}",
+                color = GrayText,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Dividers & Badges
+            HorizontalDivider(color = DeepSlate, thickness = 1.dp)
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Status Badges
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Sync Status Badge
+                    if (request.isSynced) {
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFD1FAE5), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Cloud Synced",
+                                color = Color(0xFF065F46),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .background(LightAmber, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Local Draft",
+                                color = OnAmber,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Proposal Status Badge
+                    val hasProposal = !request.proposalDraft.isNullOrBlank()
                     Box(
                         modifier = Modifier
-                            .background(MechanicalTeal.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                            .background(if (hasProposal) LightTeal else Color(0xFFF3F4F6), RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = request.sector,
-                            color = MechanicalTeal,
+                            text = if (hasProposal) "Proposal Ready" else "Drafting...",
+                            color = if (hasProposal) OnTeal else GrayText,
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = date,
-                        color = GrayText,
-                        fontSize = 10.sp
-                    )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = request.challenge.substringBefore(" ("),
-                    color = SoftWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Client: ${request.clientName} (${request.contactInfo})",
-                    color = GrayText,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // View Details Arrow Button
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "View Details",
+                        color = MechanicalTeal,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "View details",
+                        tint = MechanicalTeal,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Sync/Confirmation Status Icon (Pending Sync vs Cloud Confirmation)
-            if (request.isSynced) {
-                Icon(
-                    imageVector = Icons.Default.CloudDone,
-                    contentDescription = "Synced to Database",
-                    tint = MechanicalTeal,
-                    modifier = Modifier.size(24.dp)
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Sync,
-                    contentDescription = "Pending Sync",
-                    tint = AmberAccent,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(Icons.Default.ChevronRight, contentDescription = "View details", tint = GrayText)
         }
     }
 }

@@ -50,6 +50,9 @@ class MainViewModel(
     // --- Voice Assistant State ---
     val isAnalyzingVoice = MutableStateFlow(false)
 
+    // --- Captured Image State ---
+    val capturedImage = MutableStateFlow<android.graphics.Bitmap?>(null)
+
     init {
         // Load draft if sharedPreferences is provided
         sharedPreferences?.let { prefs ->
@@ -127,12 +130,24 @@ class MainViewModel(
         }
     }
 
+    private fun bitmapToBase64(bitmap: android.graphics.Bitmap): String {
+        return try {
+            val outputStream = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, outputStream)
+            val byteArray = outputStream.toByteArray()
+            android.util.Base64.encodeToString(byteArray, android.util.Base64.DEFAULT)
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
     fun submitRequest() {
         val name = clientName.value.trim()
         val contact = contactInfo.value.trim()
         val sector = selectedSector.value
         val challenge = selectedChallenge.value
         val description = projectDescription.value.trim()
+        val currentImage = capturedImage.value
 
         if (name.isEmpty() || contact.isEmpty() || description.isEmpty()) {
             _formState.value = FormUiState.Error("Please fill out all required fields (Name, Contact, Description).")
@@ -155,11 +170,14 @@ class MainViewModel(
                 )
                 val requestId = repository.insert(initialRequest)
                 
+                // Convert image if available
+                val imageBase64 = if (currentImage != null) bitmapToBase64(currentImage) else ""
+
                 // Upload to Google Sheets
                 var isSheetsSynced = false
                 var syncError: String? = null
                 try {
-                    syncToGoogleSheets(name, contact, sector, challenge, description)
+                    syncToGoogleSheets(name, contact, sector, challenge, description, imageBase64)
                     isSheetsSynced = true
                 } catch (e: Exception) {
                     syncError = e.localizedMessage ?: "Failed to upload to Google Sheets."
@@ -189,6 +207,7 @@ class MainViewModel(
                 clientName.value = ""
                 contactInfo.value = ""
                 projectDescription.value = ""
+                capturedImage.value = null
 
             } catch (e: Exception) {
                 _formState.value = FormUiState.Error(e.localizedMessage ?: "Failed to save or sync request.")
@@ -213,7 +232,8 @@ class MainViewModel(
         contact: String,
         sector: String,
         challenge: String,
-        description: String
+        description: String,
+        imageBase64: String
     ) {
         val token = getAccessToken()
         if (token.isEmpty()) {
@@ -237,7 +257,7 @@ class MainViewModel(
 
             // Add Header row
             val headers = listOf(
-                listOf("Timestamp", "Client Name", "Contact Info", "Industrial Sector", "Challenge Selected", "Project Specifications")
+                listOf("Timestamp", "Client Name", "Contact Info", "Industrial Sector", "Challenge Selected", "Project Specifications", "Attached Photo (Base64)")
             )
             try {
                 GoogleSheetsClient.service.appendValues(
@@ -255,7 +275,7 @@ class MainViewModel(
         // Format and append current client request row
         val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         val row = listOf(
-            listOf(timestamp, name, contact, sector, challenge, description)
+            listOf(timestamp, name, contact, sector, challenge, description, imageBase64)
         )
         GoogleSheetsClient.service.appendValues(
             authHeader = authHeader,
