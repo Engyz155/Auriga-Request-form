@@ -1,0 +1,6 @@
+{
+  "name": "Auriga Client Request",
+  "description": "Client intake and AI engineering proposal draft assistant for Auriga Automation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
